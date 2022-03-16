@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="index.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
+<body>
+<script type="text/javascript" src="script.js"></script>
+<div class="arrows">
+    <button class="left_button" onmousedown="moveleft()" onmouseup="clearmove()" ontouchstart="moveleft()"><img  class="left_img" src="arrow.jpg"></button>
+    <button class="right_button" onmousedown="moveright()" onmouseup="clearmove()" ontouchstart="moveright()" ><img  class="right_img" src="arrow.jpg"></button>
+</div>
+<div class="buttons">
+    <button id="startButton" onmousedown="startGame()" onmouseup="changeNewGame()" ontouchstart="startGame()">START</button>
+    <button id="stopButton" onmousedown="stopGame()" onmouseup="changeToResume()" ontouchstart="stopGame()">STOP</button>
+</div>
+<div>Autor: Mateusz Bębenek 224787</div>
+</body>
+</html>
