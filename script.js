@@ -2,11 +2,13 @@
 var paddle;
 var gameStarted = false;
 var gameStopped = false;
+var targets;
 
 function startGame() {
     if(!gameStarted){
         paddle = new paddleBuilder(200, 10, "red", 200, 580);
         ball = new ballBuilder(8, "blue", paddle.x + 100, paddle.y - paddle.height);
+        targets = generateTargetLocations();
         myGameArea.start();
         gameStarted = true;
     } else {
@@ -76,6 +78,23 @@ function paddleBuilder(width, height, color, x, y) {
     }    
 }
 
+function targetBuilder(width, height, color, x, y) {
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;    
+    this.x = x;
+    this.y = y;
+    this.visible = true;
+    this.update = function() {
+        ctx = myGameArea.context;
+        if(this.visible){
+            ctx.fillStyle = color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }    
+}
+
 function ballBuilder(ballRadius, color, x, y) {
     this.ballRadius = ballRadius;
     this.speedX = 0;
@@ -122,6 +141,7 @@ function updateGameArea() {
     ball.newPos();
     paddle.update();
     ball.update();
+    targets.forEach(element => element.update());
 }
 
 function moveleft() {
@@ -161,3 +181,20 @@ function changeToResume(){
         btn.innerHTML = "STOP";
     }
 }
+
+function generateTargetLocations() {
+    var targets = [];
+    shiftX = 0;
+    shiftY = 0;
+        for (var y = 0; y < 3; y++) {
+            for(var x = 0; x < 10; x++)
+            {
+                targets.push(new targetBuilder(40,20,"green",40+shiftX,40+shiftY));
+                shiftX += 55;
+            }
+            shiftX = 0;
+            shiftY += 35;
+        }
+    return targets;
+}
+
