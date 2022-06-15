@@ -1,3 +1,8 @@
+body {
+    background-color: black;
+    color: white;
+}
+
 canvas {
     padding: 0;
     margin: auto;
@@ -6,12 +11,20 @@ canvas {
     bottom: 0;
     left: 0;
     right: 0;
-    border:1px solid #d3d3d3;
-    background-color: #f1f1f1;
+    background-image: url("background.jpg");
+}
+
+p {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-top: 75px;
+    font-weight: bold;
 }
 
 .arrows {
     padding: 0;
+    padding-top: 100px;
     margin: auto;
     position: absolute;
     top: 730px;
@@ -33,11 +46,11 @@ canvas {
 }
 
 .left_button {
-    background-color: white;
+    background-color: black;
 }
 
 .right_button {
-    background-color: white;
+    background-color: black;
 }
 
 .buttons {
