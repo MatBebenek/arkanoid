@@ -14,12 +14,19 @@ canvas {
     background-image: url("background.jpg");
 }
 
-p {
+#currentGame {
     display: flex;
     justify-content: center;
     align-items: center;
     padding-top: 75px;
     font-weight: bold;
+}
+
+#previousGames {
+    display: flex;
+    justify-content: flex-end;
+    font-weight: bold;
+    max-width: 250px;
 }
 
 .arrows {

@@ -3,26 +3,57 @@ var paddle;
 var gameStarted = false;
 var gameStopped = false;
 var gameScore = 0;
-let openRequest = indexedDB.open("scoresBoard", 1);
 var targets = [];
 var nick;
 var startTime;
 var endTime;
+var elapsedTime;
+var id = 0;
+
+window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
+    window.msIndexedDB;
+
+window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction ||
+    window.msIDBTransaction;
+window.IDBKeyRange = window.IDBKeyRange ||
+    window.webkitIDBKeyRange || window.msIDBKeyRange
+
+if (!window.indexedDB) {
+    window.alert("Your browser doesn't support a stable version of IndexedDB.")
+}
+
+var db;
+var request = window.indexedDB.open("newDatabase", 1);
+
+request.onerror = function (event) {
+    console.log("error: ");
+};
+
+request.onsuccess = function (event) {
+    db = request.result;
+    console.log("success: " + db);
+};
+
+request.onupgradeneeded = function (event) {
+    var db = event.target.result;
+    var objectStore = db.createObjectStore("games", { keyPath: "id" });
+}
 
 function startGame() {
     if (!gameStarted) {
+        readAll();
         startTime = performance.now();
         let person = prompt("Please enter your name:", "Your Name");
         if (person == null || person == "") {
-            nick = "User cancelled the prompt.";
+            alert("User cancelled the prompt or entered wrong name");
         } else {
             nick = person;
+            paddle = new paddleBuilder(120, 15, 260, 580);
+            ball = new ballBuilder(8, "blue", paddle.x + 100, paddle.y - paddle.height);
+            targets = generateTargetLocations();
+            myGameArea.start();
+            gameStarted = true;
         }
-        paddle = new paddleBuilder(120, 15, 260, 580);
-        ball = new ballBuilder(8, "blue", paddle.x + 100, paddle.y - paddle.height);
-        targets = generateTargetLocations();
-        myGameArea.start();
-        gameStarted = true;
     } else {
         gameStarted = false;
         gameStopped = false;
@@ -160,8 +191,9 @@ function ballBuilder(ballRadius, color, x, y) {
                     endTime = performance.now()
                     var timeDiff = endTime - startTime;
                     timeDiff /= 1000;
-                    var timeSeconds = Math.round(timeDiff);
-                    alert("GAME OVER" + timeSeconds);
+                    elapsedTime = timeDiff.toFixed(2);
+                    alert("GAME OVER!! You were playing " + elapsedTime + " seconds!");
+                    addToDatabase();
                     document.location.reload();
                     clearInterval(myGameArea.interval);
                 }
@@ -174,7 +206,7 @@ function ballBuilder(ballRadius, color, x, y) {
 }
 
 function updateGameArea() {
-    document.getElementById("currentGame").innerHTML = nick + " is playing and have " + gameScore + " points!!";
+    document.getElementById("currentGame").innerHTML = "Hello " + nick + "! You have " + gameScore + " points!!";
     myGameArea.clear();
     paddle.newPos();
     ball.newPos();
@@ -233,5 +265,35 @@ function generateTargetLocations() {
         shiftY += 35;
     }
     return targets;
+}
+
+function addToDatabase() {
+    id += 1;
+    var request = db.transaction(["games"], "readwrite")
+        .objectStore("games")
+        .add({ id: id, nick: nick, score: gameScore, time: elapsedTime });
+
+    request.onsuccess = function (event) {
+        alert("Game has been added to your database.");
+    };
+
+    request.onerror = function (event) {
+        alert("Unable to add data!");
+    }
+}
+
+function readAll() {
+    var objectStore = db.transaction("games").objectStore("games");
+
+    objectStore.openCursor().onsuccess = function (event) {
+        var cursor = event.target.result;
+
+        if (cursor) {
+            document.getElementById("previousGames").innerHTML += "\nId: " + cursor.key + " Nick: " + cursor.value.nick + " Score: " + cursor.value.score + " Time: " + cursor.value.time;
+            cursor.continue();
+        } else {
+
+        }
+    };
 }
 
