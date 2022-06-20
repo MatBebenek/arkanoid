@@ -40,8 +40,8 @@ request.onupgradeneeded = function (event) {
 }
 
 function startGame() {
+    readAll();
     if (!gameStarted) {
-        readAll();
         startTime = performance.now();
         let person = prompt("Please enter your name:", "Your Name");
         if (person == null || person == "") {
@@ -268,13 +268,12 @@ function generateTargetLocations() {
 }
 
 function addToDatabase() {
-    id += 1;
     var request = db.transaction(["games"], "readwrite")
         .objectStore("games")
         .add({ id: id, nick: nick, score: gameScore, time: elapsedTime });
 
     request.onsuccess = function (event) {
-        alert("Game has been added to your database.");
+        alert("Game has been added to database.");
     };
 
     request.onerror = function (event) {
@@ -289,10 +288,11 @@ function readAll() {
         var cursor = event.target.result;
 
         if (cursor) {
-            document.getElementById("previousGames").innerHTML += "\nId: " + cursor.key + " Nick: " + cursor.value.nick + " Score: " + cursor.value.score + " Time: " + cursor.value.time;
+            document.getElementById("previousGames").innerHTML += "Id: " + cursor.key + " Nick: " + cursor.value.nick + " Score: " + cursor.value.score + " Time: " + cursor.value.time + " sec <br />";
+            id = cursor.key;
             cursor.continue();
         } else {
-
+            id += 1;
         }
     };
 }

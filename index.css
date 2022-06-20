@@ -26,7 +26,7 @@ canvas {
     display: flex;
     justify-content: flex-end;
     font-weight: bold;
-    max-width: 250px;
+    max-width: 300px;
 }
 
 .arrows {
