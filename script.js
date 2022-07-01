@@ -9,6 +9,9 @@ var startTime;
 var endTime;
 var elapsedTime;
 var id = 0;
+var ballDefaultSpeed = 2;
+var ballTrailLength = 30;
+var ballTrailBaseOpacity = 0.15;
 
 window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
     window.msIndexedDB;
@@ -49,7 +52,7 @@ function startGame() {
         } else {
             nick = person;
             paddle = new paddleBuilder(120, 15, 260, 580);
-            ball = new ballBuilder(8, "blue", paddle.x + 100, paddle.y - paddle.height);
+            ball = new ballBuilder(8, "red", paddle.x + 100, paddle.y - paddle.height);
             targets = generateTargetLocations();
             myGameArea.start();
             gameStarted = true;
@@ -151,17 +154,17 @@ function targetBuilder(width, height, x, y) {
 
 function ballBuilder(ballRadius, color, x, y) {
     this.ballRadius = ballRadius;
-    this.speedX = 0;
-    this.speedY = 0;
+    this.speedX = ballDefaultSpeed;
+    this.speedY = ballDefaultSpeed;
     this.x = x;
     this.y = y + this.ballRadius;
     this.dx = 2;
     this.dy = -2;
     this.update = function () {
-        ctx.beginPath();
         ctx = myGameArea.context;
-        ctx.arc(this.x, this.y, this.ballRadius, 0, Math.PI * 2);
         ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.ballRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.closePath();
     }
@@ -175,16 +178,23 @@ function ballBuilder(ballRadius, color, x, y) {
             ) {
                 gameScore++;
                 element.visible = false;
+                this.speedY = -this.speedY;
             }
         });
         if (this.x + this.dx > myGameArea.canvas.width - this.ballRadius || this.x + this.dx < this.ballRadius) {
-            this.dx = -this.dx;
+            this.speedX = -this.speedX;
         }
         if (this.y + this.dy < this.ballRadius) {
-            this.dy = -this.dy;
+            this.speedY = -this.speedY;
         } else if (this.y + this.dy > myGameArea.canvas.height - this.ballRadius - paddle.height) {
             if (this.x > paddle.x && this.x < paddle.x + paddle.width) {
-                this.dy = -this.dy;
+                var c = calculateBallSpeed(ball, paddle);
+                if (this.speedX < 0) {
+                    this.speedX = -ballDefaultSpeed * c;
+                } else {
+                    this.speedX = ballDefaultSpeed * c;
+                }
+                this.speedY = -this.speedY;
             }
             else {
                 if (this.y + this.dy > myGameArea.canvas.height - this.ballRadius) {
@@ -200,8 +210,8 @@ function ballBuilder(ballRadius, color, x, y) {
             }
         }
 
-        this.x += this.dx;
-        this.y += this.dy;
+        this.x += this.speedX;
+        this.y -= this.speedY;
     }
 }
 
@@ -216,11 +226,11 @@ function updateGameArea() {
 }
 
 function moveleft() {
-    paddle.speedX = -2;
+    paddle.speedX = -3;
 }
 
 function moveright() {
-    paddle.speedX = 2;
+    paddle.speedX = 3;
 }
 
 function clearmove() {
@@ -283,6 +293,7 @@ function addToDatabase() {
 
 function readAll() {
     var objectStore = db.transaction("games").objectStore("games");
+    document.getElementById("previousGames").innerHTML = "Score Board:<br>";
 
     objectStore.openCursor().onsuccess = function (event) {
         var cursor = event.target.result;
@@ -295,5 +306,19 @@ function readAll() {
             id += 1;
         }
     };
+}
+
+function calculateBallSpeed(ball, paddle) {
+    var c = 0;
+    var g = ((ball.x - paddle.x) / (paddle.width));
+    if (g <= 0.1) c = 3;
+    if (g > 0.1 && g <= 0.3) c = 2;
+    if (g > 0.3 && g <= 0.4) c = 1.5;
+    if (g > 0.4 && g <= 0.6) c = 1;
+    if (g > 0.6 && g <= 0.7) c = 1.5;
+    if (g > 0.7 && g <= 0.9) c = 2;
+    if (g > 0.9) c = 3;
+
+    return c;
 }
 
