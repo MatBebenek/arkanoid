@@ -10,8 +10,8 @@ var endTime;
 var elapsedTime;
 var id = 0;
 var ballDefaultSpeed = 2;
-var ballTrailLength = 30;
-var ballTrailBaseOpacity = 0.15;
+var gameModeOneTimeOutInMs = 5000;
+var gameModeTwoTimeOutInMs = 15000;
 
 window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
     window.msIndexedDB;
