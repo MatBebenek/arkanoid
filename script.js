@@ -3,6 +3,7 @@ var paddle;
 var gameStarted = false;
 var gameStopped = false;
 var gameScore = 0;
+var gameMode;
 var targets = [];
 var nick;
 var startTime;
@@ -45,11 +46,23 @@ request.onupgradeneeded = function (event) {
 function startGame() {
     readAll();
     if (!gameStarted) {
-        startTime = performance.now();
+        gameMode = prompt("Select game mode. 1 - Infinite spawns, 2 - Slide");
+        switch (gameMode) {
+            case '1':
+                mGameMode = 1;
+                break;
+            case '2':
+                mGameMode = 2;
+                break;
+            default:
+                alert("Incorrect game mode.");
+                break;
+        }
         let person = prompt("Please enter your name:", "Your Name");
         if (person == null || person == "") {
             alert("User cancelled the prompt or entered wrong name");
         } else {
+            startTime = performance.now();
             nick = person;
             paddle = new paddleBuilder(120, 15, 260, 580);
             ball = new ballBuilder(8, "red", paddle.x + 100, paddle.y - paddle.height);
@@ -142,12 +155,19 @@ function targetBuilder(width, height, x, y) {
     this.bottomRight = [x + width, y]
     this.topRight = [x + width, y + height]
     this.topLeft = [x, y + height]
+    this.timeInvisible = performance.now();
     this.update = function () {
         ctx = myGameArea.context;
         var pat = ctx.createPattern(img, "repeat");
         if (this.visible) {
             ctx.fillStyle = pat;
             ctx.fillRect(this.x, this.y, this.width, this.height);
+        } else {
+            if (gameMode == 1) {
+                if (this.timeInvisible - performance.now() >= 5) {
+                    this.visible = true;
+                }
+            }
         }
     }
 }
@@ -216,7 +236,7 @@ function ballBuilder(ballRadius, color, x, y) {
 }
 
 function updateGameArea() {
-    document.getElementById("currentGame").innerHTML = "Hello " + nick + "! You have " + gameScore + " points!!";
+    document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
     myGameArea.clear();
     paddle.newPos();
     ball.newPos();
