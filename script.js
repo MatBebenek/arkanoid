@@ -1,4 +1,24 @@
 
+//canvas
+var canvasWidth = 600;
+var canvasHeight = 600;
+var canvasName = "canvas";
+
+//paddle
+var paddleImg = "paddle.jpg"
+var paddleDefaultSpeed = 3;
+var paddleNotMoving = 0;
+
+//ball
+var ballDefaultSpeed = 2;
+
+//target
+var secondsToRenewTarget = 5;
+var secondsToAddLine = 5;
+
+//game
+var leftKeyCode = '37';
+var rightKeyCode = '39';
 var paddle;
 var gameStarted = false;
 var gameStopped = false;
@@ -6,42 +26,46 @@ var gameScore = 0;
 var gameMode;
 var targets = [];
 var nick;
-var startTime;
-var endTime;
-var elapsedTime;
-var id = 0;
-var ballDefaultSpeed = 2;
+var startGameTime;
+var endGameTime;
+var elapsedGameTime;
+var playerId = 0;
 var gameModeOneTimeOutInMs = 5000;
 var gameModeTwoTimeOutInMs = 15000;
-
-window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
-    window.msIndexedDB;
-
-window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction ||
-    window.msIDBTransaction;
-window.IDBKeyRange = window.IDBKeyRange ||
-    window.webkitIDBKeyRange || window.msIDBKeyRange
-
-if (!window.indexedDB) {
-    window.alert("Your browser doesn't support a stable version of IndexedDB.")
-}
-
 var db;
-var request = window.indexedDB.open("newDatabase", 1);
 
-request.onerror = function (event) {
-    console.log("error: ");
-};
 
-request.onsuccess = function (event) {
-    db = request.result;
-    console.log("success: " + db);
-};
+function initDb() {
+    window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
+        window.msIndexedDB;
 
-request.onupgradeneeded = function (event) {
-    var db = event.target.result;
-    var objectStore = db.createObjectStore("games", { keyPath: "id" });
+    window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction ||
+        window.msIDBTransaction;
+    window.IDBKeyRange = window.IDBKeyRange ||
+        window.webkitIDBKeyRange || window.msIDBKeyRange
+
+    if (!window.indexedDB) {
+        window.alert("Your browser doesn't support a stable version of IndexedDB.")
+    }
+
+    var request = window.indexedDB.open("newDatabase", 1);
+
+    request.onerror = function (event) {
+        console.log("error: ");
+    };
+
+    request.onsuccess = function (event) {
+        db = request.result;
+        console.log("success: " + db);
+    };
+
+    request.onupgradeneeded = function (event) {
+        var db = event.target.result;
+        var objectStore = db.createObjectStore("games", { keyPath: "id" });
+    };
 }
+
+initDb();
 
 function startGame() {
     readAll();
@@ -49,26 +73,28 @@ function startGame() {
         gameMode = prompt("Select game mode. 1 - Infinite spawns, 2 - Slide");
         switch (gameMode) {
             case '1':
-                mGameMode = 1;
+                gameMode = 1;
                 break;
             case '2':
-                mGameMode = 2;
+                gameMode = 2;
                 break;
             default:
                 alert("Incorrect game mode.");
                 break;
         }
-        let person = prompt("Please enter your name:", "Your Name");
-        if (person == null || person == "") {
-            alert("User cancelled the prompt or entered wrong name");
-        } else {
-            startTime = performance.now();
-            nick = person;
-            paddle = new paddleBuilder(120, 15, 260, 580);
-            ball = new ballBuilder(8, "red", paddle.x + 100, paddle.y - paddle.height);
-            targets = generateTargetLocations();
-            myGameArea.start();
-            gameStarted = true;
+        if (gameMode == 1 || gameMode == 2) {
+            let person = prompt("Please enter your name:", "Your Name");
+            if (person == null || person == "") {
+                alert("User cancelled the prompt or entered wrong name");
+            } else {
+                startGameTime = performance.now();
+                nick = person;
+                paddle = new paddleBuilder(120, 15, 260, 580);
+                ball = new ballBuilder(8, "red", paddle.x + 100, paddle.y - paddle.height);
+                targets = generateTargetLocations();
+                myGameArea.start();
+                gameStarted = true;
+            }
         }
     } else {
         gameStarted = false;
@@ -99,10 +125,10 @@ function newGame() {
 }
 
 var myGameArea = {
-    canvas: document.createElement("canvas"),
+    canvas: document.createElement(canvasName),
     start: function () {
-        this.canvas.width = 600;
-        this.canvas.height = 600;
+        this.canvas.width = canvasWidth;
+        this.canvas.height = canvasHeight;
         this.context = this.canvas.getContext("2d");
         document.body.insertBefore(this.canvas, document.body.childNodes[0]);
         this.interval = setInterval(updateGameArea, 10);
@@ -114,7 +140,7 @@ var myGameArea = {
 
 function paddleBuilder(width, height, x, y) {
     var img = new Image();
-    img.src = "paddle.jpg";
+    img.src = paddleImg;
     this.width = width;
     this.height = height;
     this.speedX = 0;
@@ -151,23 +177,21 @@ function targetBuilder(width, height, x, y) {
     this.x = x;
     this.y = y;
     this.visible = true;
+    this.timeInvisible = 0;
     this.bottomLeft = [x, y]
     this.bottomRight = [x + width, y]
     this.topRight = [x + width, y + height]
     this.topLeft = [x, y + height]
-    this.timeInvisible = performance.now();
     this.update = function () {
         ctx = myGameArea.context;
         var pat = ctx.createPattern(img, "repeat");
         if (this.visible) {
             ctx.fillStyle = pat;
             ctx.fillRect(this.x, this.y, this.width, this.height);
-        } else {
-            if (gameMode == 1) {
-                if (this.timeInvisible - performance.now() >= 5) {
-                    this.visible = true;
-                }
-            }
+        }
+        if (gameMode == 1 && (((performance.now() - this.timeInvisible) / 1000) >= secondsToRenewTarget)) {
+            this.visible = true;
+            this.timeInvisible = 0;
         }
     }
 }
@@ -199,6 +223,9 @@ function ballBuilder(ballRadius, color, x, y) {
                 gameScore++;
                 element.visible = false;
                 this.speedY = -this.speedY;
+                if (gameMode == 1) {
+                    element.timeInvisible = performance.now();
+                }
             }
         });
         if (this.x + this.dx > myGameArea.canvas.width - this.ballRadius || this.x + this.dx < this.ballRadius) {
@@ -218,11 +245,8 @@ function ballBuilder(ballRadius, color, x, y) {
             }
             else {
                 if (this.y + this.dy > myGameArea.canvas.height - this.ballRadius) {
-                    endTime = performance.now()
-                    var timeDiff = endTime - startTime;
-                    timeDiff /= 1000;
-                    elapsedTime = timeDiff.toFixed(2);
-                    alert("GAME OVER!! You were playing " + elapsedTime + " seconds!");
+                    elapsedGameTime = getElapsedGameTime().toFixed(2);
+                    alert("GAME OVER!! You were playing " + elapsedGameTime + " seconds!");
                     addToDatabase();
                     document.location.reload();
                     clearInterval(myGameArea.interval);
@@ -235,6 +259,12 @@ function ballBuilder(ballRadius, color, x, y) {
     }
 }
 
+function getElapsedGameTime() {
+    timeDiff = performance.now() - startGameTime;
+    timeDiff /= 1000;
+    return timeDiff;
+}
+
 function updateGameArea() {
     document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
     myGameArea.clear();
@@ -242,29 +272,41 @@ function updateGameArea() {
     ball.newPos();
     paddle.update();
     ball.update();
+    if (gameMode == 2 && getElapsedGameTime() >= secondsToAddLine) {
+        addNewLine();
+    }
     targets.forEach(element => element.update());
 }
 
+function addNewLine() {
+    targets.forEach(element => element.y = element.y + 35 + 20 + 10)
+    //shiftX = 0;
+    //for (var x = 0; x < 10; x++) {
+    //    targets.push(new targetBuilder(40, 20, 40 + shiftX, 40));
+    //    shiftX += 55;
+    //}
+}
+
 function moveleft() {
-    paddle.speedX = -3;
+    paddle.speedX = -paddleDefaultSpeed;
 }
 
 function moveright() {
-    paddle.speedX = 3;
+    paddle.speedX = paddleDefaultSpeed;
 }
 
 function clearmove() {
-    paddle.speedX = 0;
-    paddle.speedY = 0;
+    paddle.speedX = paddleNotMoving;
+    paddle.speedY = paddleNotMoving;
 }
 
 document.onkeydown = checkkey;
 document.onkeyup = clearmove;
 
 function checkkey(e) {
-    if (e.keyCode == '37') {
+    if (e.keyCode == leftKeyCode) {
         moveleft();
-    } else if (e.keyCode == '39') {
+    } else if (e.keyCode == rightKeyCode) {
         moveright();
     }
 }
@@ -300,7 +342,7 @@ function generateTargetLocations() {
 function addToDatabase() {
     var request = db.transaction(["games"], "readwrite")
         .objectStore("games")
-        .add({ id: id, nick: nick, score: gameScore, time: elapsedTime });
+        .add({ id: playerId, nick: nick, score: gameScore, time: elapsedGameTime });
 
     request.onsuccess = function (event) {
         alert("Game has been added to database.");
@@ -320,10 +362,10 @@ function readAll() {
 
         if (cursor) {
             document.getElementById("previousGames").innerHTML += "Id: " + cursor.key + " Nick: " + cursor.value.nick + " Score: " + cursor.value.score + " Time: " + cursor.value.time + " sec <br />";
-            id = cursor.key;
+            playerId = cursor.key;
             cursor.continue();
         } else {
-            id += 1;
+            playerId += 1;
         }
     };
 }
