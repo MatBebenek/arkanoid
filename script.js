@@ -8,13 +8,20 @@ var canvasName = "canvas";
 var paddleImg = "paddle.jpg"
 var paddleDefaultSpeed = 3;
 var paddleNotMoving = 0;
+var defaultPaddleWidth = 120;
 
 //ball
 var ballDefaultSpeed = 2;
+var ballRadius = 8;
 
 //target
 var secondsToRenewTarget = 5;
-var secondsToAddLine = 5;
+var milisecondsToAddLine = 20000;
+var wasMoved = false;
+var targetWidth = 40;
+var targetHeight = 20;
+var defaultTargetShiftX = 55;
+var defaultTargetShiftY = 35;
 
 //game
 var leftKeyCode = '37';
@@ -33,7 +40,23 @@ var playerId = 0;
 var gameModeOneTimeOutInMs = 5000;
 var gameModeTwoTimeOutInMs = 15000;
 var db;
-
+var bonusOpacity = 0.7;
+var bonusFallSpeed = 1;
+var bonusHandlers = [];
+var bonusLabels = [];
+var bonusPaddleIncrease = 1.5;
+var bonusPaddleShrink = 0.7;
+var isControlReversed = false;
+var bonuses = [];
+var bonusChance = 0.2;
+var newBallSpawnRate = 5;
+var tillNewBallCounter = 0;
+var aTobTypeBlocks = 0.5;
+var balls = [];
+var ballColors = ["red", "green", "blue", "orange"];
+var ballSpawnAreaYmin = 100;
+var ballSpawnAreaYmax = 150;
+var labelColor = "white";
 
 function initDb() {
     window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
@@ -89,8 +112,10 @@ function startGame() {
             } else {
                 startGameTime = performance.now();
                 nick = person;
-                paddle = new paddleBuilder(120, 15, 260, 580);
-                ball = new ballBuilder(8, "red", paddle.x + 100, paddle.y - paddle.height);
+                paddle = new paddleBuilder(defaultPaddleWidth, 15, 260, 580);
+                ball = new ballBuilder(ballRadius, "red", paddle.x + 100, paddle.y - paddle.height);
+                balls.push(ball);
+                initBonuses();
                 targets = generateTargetLocations();
                 myGameArea.start();
                 gameStarted = true;
@@ -108,9 +133,13 @@ function stopGame() {
     if (gameStarted) {
         if (gameStopped) {
             myGameArea.interval = setInterval(updateGameArea, 10);
+            if (gameMode == 2) {
+                myGameArea.newLineInterval = setInterval(addNewLine, milisecondsToAddLine);
+            }
             gameStopped = false;
         } else {
             clearInterval(myGameArea.interval);
+            clearInterval(myGameArea.newLineInterval);
             gameStopped = true;
         }
     }
@@ -132,6 +161,9 @@ var myGameArea = {
         this.context = this.canvas.getContext("2d");
         document.body.insertBefore(this.canvas, document.body.childNodes[0]);
         this.interval = setInterval(updateGameArea, 10);
+        if (gameMode == 2) {
+            this.newLineInterval = setInterval(addNewLine, milisecondsToAddLine);
+        }
     },
     clear: function () {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -148,6 +180,7 @@ function paddleBuilder(width, height, x, y) {
     this.x = x;
     this.y = y;
     this.update = function () {
+        checkBonusToPaddleCollision();
         ctx = myGameArea.context;
         var pat = ctx.createPattern(img, "repeat");
         ctx.fillStyle = pat;
@@ -167,6 +200,33 @@ function paddleBuilder(width, height, x, y) {
     }
 }
 
+function bonusBuilder(width, height, x, y) {
+    this.width = width;
+    this.height = height;
+    this.speedY = bonusFallSpeed;
+    this.x = x;
+    this.y = y;
+    let selection = Math.floor(Math.random() * bonusHandlers.length);
+    this.action = bonusHandlers[selection];
+    this.label = bonusLabels[selection];
+    this.update = function () {
+        if (this.visible != true) return;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.rect(this.x, this.y, this.width, this.height);
+        ctx.stroke();
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.closePath();
+        ctx.globalAlpha = 1;
+        ctx.font = "12px Arial";
+        ctx.fillStyle = labelColor;
+        ctx.fillText(this.label, this.x, this.y + 13);
+    }
+    this.newPos = function () {
+        this.y += this.speedY;
+    }
+}
+
 function targetBuilder(width, height, x, y) {
     var img = new Image();
     img.src = "target.jpg";
@@ -178,11 +238,10 @@ function targetBuilder(width, height, x, y) {
     this.y = y;
     this.visible = true;
     this.timeInvisible = 0;
-    this.bottomLeft = [x, y]
-    this.bottomRight = [x + width, y]
-    this.topRight = [x + width, y + height]
-    this.topLeft = [x, y + height]
+    this.isSpecialBlock = false;
+    if (Math.random() > aTobTypeBlocks) this.isSpecialBlock = true;
     this.update = function () {
+        this.setCorners();
         ctx = myGameArea.context;
         var pat = ctx.createPattern(img, "repeat");
         if (this.visible) {
@@ -193,6 +252,16 @@ function targetBuilder(width, height, x, y) {
             this.visible = true;
             this.timeInvisible = 0;
         }
+    }
+    this.moveTargetDown = function () {
+        this.y = this.y + defaultTargetShiftY;
+        this.update();
+    }
+    this.setCorners = function () {
+        this.bottomLeft = [this.x, this.y]
+        this.bottomRight = [this.x + this.width, this.y]
+        this.topRight = [this.x + this.width, this.y + this.height]
+        this.topLeft = [this.x, this.y + this.height]
     }
 }
 
@@ -221,6 +290,7 @@ function ballBuilder(ballRadius, color, x, y) {
                 ((this.y + this.ballRadius) > element.bottomLeft[1] && this.y < element.topLeft[1])
             ) {
                 gameScore++;
+                applySpecialBlockLogic(element);
                 element.visible = false;
                 this.speedY = -this.speedY;
                 if (gameMode == 1) {
@@ -250,6 +320,7 @@ function ballBuilder(ballRadius, color, x, y) {
                     addToDatabase();
                     document.location.reload();
                     clearInterval(myGameArea.interval);
+                    clearInterval(myGameArea.newLineInterval);
                 }
             }
         }
@@ -265,34 +336,55 @@ function getElapsedGameTime() {
     return timeDiff;
 }
 
-function updateGameArea() {
-    document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
-    myGameArea.clear();
-    paddle.newPos();
-    ball.newPos();
-    paddle.update();
-    ball.update();
-    if (gameMode == 2 && getElapsedGameTime() >= secondsToAddLine) {
-        addNewLine();
-    }
-    targets.forEach(element => element.update());
-}
-
 function addNewLine() {
-    targets.forEach(element => element.y = element.y + 35 + 20 + 10)
-    //shiftX = 0;
-    //for (var x = 0; x < 10; x++) {
-    //    targets.push(new targetBuilder(40, 20, 40 + shiftX, 40));
-    //    shiftX += 55;
-    //}
+    targets.forEach(element => element.moveTargetDown())
+    shiftX = 0;
+    for (var x = 0; x < 10; x++) {
+        targets.push(new targetBuilder(40, 20, 40 + shiftX, 40));
+        shiftX += 55;
+    }
 }
 
 function moveleft() {
-    paddle.speedX = -paddleDefaultSpeed;
+    if (isControlReversed) {
+        paddle.speedX = paddleDefaultSpeed;
+    } else {
+        paddle.speedX = -paddleDefaultSpeed;
+    }
 }
 
 function moveright() {
-    paddle.speedX = paddleDefaultSpeed;
+    if (isControlReversed) {
+        paddle.speedX = -paddleDefaultSpeed;
+    } else {
+        paddle.speedX = paddleDefaultSpeed;
+    }
+}
+
+function applySpecialBlockLogic(target) {
+    if (target.isSpecialBlock == true && Math.random() < bonusChance) {
+        bonuses.push(new bonusBuilder(target.width, target.height, target.x, target.y));
+    } else {
+        tillNewBallCounter++;
+        if (tillNewBallCounter > newBallSpawnRate) {
+            tillNewBallCounter = 0;
+            balls.push(generateNewBall());
+        }
+    }
+}
+
+function checkBonusToPaddleCollision() {
+    bonuses.forEach(bonus => {
+        if (bonus.x + bonus.width > paddle.x
+            && bonus.x < paddle.x + paddle.width
+            && bonus.y + bonus.height > paddle.y
+            && bonus.y < paddle.y + paddle.height) {
+            bonus.action();
+            bonus.toRemove = true;
+
+        }
+    });
+    bonuses = bonuses.filter(bonus => !bonus.toRemove);
 }
 
 function clearmove() {
@@ -330,11 +422,12 @@ function generateTargetLocations() {
     shiftY = 0;
     for (var y = 0; y < 3; y++) {
         for (var x = 0; x < 10; x++) {
-            targets.push(new targetBuilder(40, 20, 40 + shiftX, 40 + shiftY));
-            shiftX += 55;
+            element = new targetBuilder(targetWidth, targetHeight, 40 + shiftX, 40 + shiftY);
+            targets.push(element);
+            shiftX += defaultTargetShiftX;
         }
         shiftX = 0;
-        shiftY += 35;
+        shiftY += defaultTargetShiftY;
     }
     return targets;
 }
@@ -384,3 +477,63 @@ function calculateBallSpeed(ball, paddle) {
     return c;
 }
 
+function bonusResizePaddle() {
+    paddle.width = paddle.width * bonusPaddleIncrease;
+    window.setTimeout(() => { paddle.width = defaultPaddleWidth }, 5000);
+}
+
+function bonusShrinkPaddle() {
+    paddle.width = paddle.width * bonusPaddleShrink;
+    window.setTimeout(() => { paddle.width = defaultPaddleWidth }, 5000);
+}
+
+function bonusPointsTimesTwo() {
+    currentPointsPerBlock = 2;
+    window.setTimeout(() => { currentPointsPerBlock = defaultPointsPerBlock }, 5000);
+}
+
+function bonusPointsTimesFive() {
+    currentPointsPerBlock = 5;
+    window.setTimeout(() => { currentPointsPerBlock = defaultPointsPerBlock }, 5000);
+}
+
+function bonusReverseControl() {
+    isControlReversed = true;
+    window.setTimeout(() => { isControlReversed = false }, 5000);
+}
+
+function initBonuses() {
+    bonusHandlers.push(() => { bonusResizePaddle() });
+    bonusHandlers.push(() => { bonusPointsTimesTwo() });
+    bonusHandlers.push(() => { bonusPointsTimesFive() });
+    bonusHandlers.push(() => { bonusShrinkPaddle() });
+    bonusHandlers.push(() => { bonusReverseControl() });
+
+    bonusLabels.push("IncSize");
+    bonusLabels.push("Pts x 2");
+    bonusLabels.push("Pts x 5");
+    bonusLabels.push("DecSize");
+    bonusLabels.push("Reverse");
+}
+
+function generateNewBall() {
+    var ball = ballBuilder(
+        ballRadius,
+        ballColors[Math.floor(Math.random() * ballColors.length)],
+        Math.random() * canvasWidth,
+        ballSpawnAreaYmin + Math.random() * (ballSpawnAreaYmax - ballSpawnAreaYmin)
+    );
+    return ball;
+}
+
+function updateGameArea() {
+    document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
+    myGameArea.clear();
+    targets.forEach(element => element.update());
+    paddle.newPos();
+    ball.newPos();
+    bonuses.forEach(x => x.newPos());
+    paddle.update();
+    ball.update();
+    bonuses.forEach(x => x.update());
+}
