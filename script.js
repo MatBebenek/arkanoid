@@ -57,6 +57,8 @@ var ballColors = ["red", "green", "blue", "orange"];
 var ballSpawnAreaYmin = 100;
 var ballSpawnAreaYmax = 150;
 var labelColor = "white";
+var defaultPointsPerBlock = 1;
+var currentPointsPerBlock = defaultPointsPerBlock;
 
 function initDb() {
     window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB ||
@@ -113,8 +115,8 @@ function startGame() {
                 startGameTime = performance.now();
                 nick = person;
                 paddle = new paddleBuilder(defaultPaddleWidth, 15, 260, 580);
-                ball = new ballBuilder(ballRadius, "red", paddle.x + 100, paddle.y - paddle.height);
-                balls.push(ball);
+                firstBall = new ballBuilder(ballRadius, "red", paddle.x + 100, paddle.y - paddle.height);
+                balls.push(firstBall);
                 initBonuses();
                 targets = generateTargetLocations();
                 myGameArea.start();
@@ -201,6 +203,8 @@ function paddleBuilder(width, height, x, y) {
 }
 
 function bonusBuilder(width, height, x, y) {
+    var img = new Image();
+    img.src = "target.jpg";
     this.width = width;
     this.height = height;
     this.speedY = bonusFallSpeed;
@@ -210,16 +214,11 @@ function bonusBuilder(width, height, x, y) {
     this.action = bonusHandlers[selection];
     this.label = bonusLabels[selection];
     this.update = function () {
-        if (this.visible != true) return;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.rect(this.x, this.y, this.width, this.height);
-        ctx.stroke();
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        ctx.closePath();
-        ctx.globalAlpha = 1;
+        ctx = myGameArea.canvas.getContext("2d");
+        var pat = ctx.createPattern(img, "repeat");
         ctx.font = "12px Arial";
-        ctx.fillStyle = labelColor;
+        ctx.fillStyle = pat;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
         ctx.fillText(this.label, this.x, this.y + 13);
     }
     this.newPos = function () {
@@ -289,7 +288,7 @@ function ballBuilder(ballRadius, color, x, y) {
                 (this.x > element.bottomLeft[0] && this.x < element.bottomRight[0]) &&
                 ((this.y + this.ballRadius) > element.bottomLeft[1] && this.y < element.topLeft[1])
             ) {
-                gameScore++;
+                gameScore += currentPointsPerBlock;
                 applySpecialBlockLogic(element);
                 element.visible = false;
                 this.speedY = -this.speedY;
@@ -305,7 +304,7 @@ function ballBuilder(ballRadius, color, x, y) {
             this.speedY = -this.speedY;
         } else if (this.y + this.dy > myGameArea.canvas.height - this.ballRadius - paddle.height) {
             if (this.x > paddle.x && this.x < paddle.x + paddle.width) {
-                var c = calculateBallSpeed(ball, paddle);
+                var c = calculateBallSpeed(this, paddle);
                 if (this.speedX < 0) {
                     this.speedX = -ballDefaultSpeed * c;
                 } else {
@@ -315,12 +314,16 @@ function ballBuilder(ballRadius, color, x, y) {
             }
             else {
                 if (this.y + this.dy > myGameArea.canvas.height - this.ballRadius) {
-                    elapsedGameTime = getElapsedGameTime().toFixed(2);
-                    alert("GAME OVER!! You were playing " + elapsedGameTime + " seconds!");
-                    addToDatabase();
-                    document.location.reload();
-                    clearInterval(myGameArea.interval);
-                    clearInterval(myGameArea.newLineInterval);
+                    if (balls.length == 1) {
+                        elapsedGameTime = getElapsedGameTime().toFixed(2);
+                        alert("GAME OVER!! You were playing " + elapsedGameTime + " seconds!");
+                        addToDatabase();
+                        document.location.reload();
+                        clearInterval(myGameArea.interval);
+                        clearInterval(myGameArea.newLineInterval);
+                    } else {
+                        balls = arrayRemove(balls, this);
+                    }
                 }
             }
         }
@@ -328,6 +331,13 @@ function ballBuilder(ballRadius, color, x, y) {
         this.x += this.speedX;
         this.y -= this.speedY;
     }
+}
+
+function arrayRemove(arr, value) {
+
+    return arr.filter(function (ele) {
+        return ele != value;
+    });
 }
 
 function getElapsedGameTime() {
@@ -517,7 +527,7 @@ function initBonuses() {
 }
 
 function generateNewBall() {
-    var ball = ballBuilder(
+    var ball = new ballBuilder(
         ballRadius,
         ballColors[Math.floor(Math.random() * ballColors.length)],
         Math.random() * canvasWidth,
@@ -531,9 +541,9 @@ function updateGameArea() {
     myGameArea.clear();
     targets.forEach(element => element.update());
     paddle.newPos();
-    ball.newPos();
+    balls.forEach(one => one.newPos());
     bonuses.forEach(x => x.newPos());
     paddle.update();
-    ball.update();
+    balls.forEach(one => one.update());
     bonuses.forEach(x => x.update());
 }
