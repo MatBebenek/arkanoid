@@ -5,6 +5,7 @@ var canvasHeight = 600;
 var canvasName = "canvas";
 
 //paddle
+var paddle;
 var paddleImg = "paddle.jpg"
 var paddleDefaultSpeed = 3;
 var paddleNotMoving = 0;
@@ -22,24 +23,25 @@ var targetWidth = 40;
 var targetHeight = 20;
 var defaultTargetShiftX = 55;
 var defaultTargetShiftY = 35;
+var blockImg = "target.jpg";
 
 //game
 var leftKeyCode = '37';
 var rightKeyCode = '39';
-var paddle;
 var gameStarted = false;
 var gameStopped = false;
 var gameScore = 0;
 var gameMode;
-var targets = [];
+var blocks = [];
 var nick;
 var startGameTime;
 var endGameTime;
 var elapsedGameTime;
 var playerId = 0;
-var gameModeOneTimeOutInMs = 5000;
-var gameModeTwoTimeOutInMs = 15000;
 var db;
+
+//bonus
+var bonusImg = "bonus.jpg";
 var bonusOpacity = 0.7;
 var bonusFallSpeed = 1;
 var bonusHandlers = [];
@@ -91,6 +93,8 @@ function initDb() {
 }
 
 initDb();
+document.onkeydown = checkkey;
+document.onkeyup = clearmove;
 
 function startGame() {
     readAll();
@@ -113,13 +117,13 @@ function startGame() {
                 alert("User cancelled the prompt or entered wrong name");
             } else {
                 startGameTime = performance.now();
+                myGameArea.start();
                 nick = person;
-                paddle = new paddleBuilder(defaultPaddleWidth, 15, 260, 580);
-                firstBall = new ballBuilder(ballRadius, "BlueViolet", paddle.x + 100, paddle.y - paddle.height);
+                paddle = new Paddle(defaultPaddleWidth, 15, 260, 580);
+                firstBall = new Ball(ballRadius, "BlueViolet", paddle.x + 100, paddle.y - paddle.height);
                 balls.push(firstBall);
                 initBonuses();
-                targets = generateTargetLocations();
-                myGameArea.start();
+                blocks = generateTargetLocations();
                 gameStarted = true;
             }
         }
@@ -172,23 +176,31 @@ var myGameArea = {
     }
 }
 
-function paddleBuilder(width, height, x, y) {
-    var img = new Image();
-    img.src = paddleImg;
-    this.width = width;
-    this.height = height;
-    this.speedX = 0;
-    this.speedY = 0;
-    this.x = x;
-    this.y = y;
-    this.update = function () {
-        checkBonusToPaddleCollision();
-        ctx = myGameArea.context;
-        var pat = ctx.createPattern(img, "repeat");
-        ctx.fillStyle = pat;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+class Component {
+    constructor(width, height, x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.ctx = myGameArea.context;
     }
-    this.newPos = function () {
+}
+
+class Paddle extends Component {
+    constructor(width, height, x, y) {
+        super(width, height, x, y);
+        this.img = new Image();
+        this.img.src = paddleImg;
+        this.speedX = 0;
+        this.speedY = 0;
+    }
+    update() {
+        checkBonusToPaddleCollision();
+        this.pat = this.ctx.createPattern(this.img, "repeat");
+        this.ctx.fillStyle = this.pat;
+        this.ctx.fillRect(this.x, this.y, this.width, this.height);
+    }
+    newPos() {
         this.x += this.speedX;
         if (this.x < 0) {
             this.x = 0;
@@ -202,101 +214,84 @@ function paddleBuilder(width, height, x, y) {
     }
 }
 
-function bonusBuilder(width, height, x, y) {
-    var img = new Image();
-    img.src = "bonus.jpg";
-    this.width = width;
-    this.height = height;
-    this.speedY = bonusFallSpeed;
-    this.x = x;
-    this.y = y;
-    let selection = Math.floor(Math.random() * bonusHandlers.length);
-    this.action = bonusHandlers[selection];
-    this.label = bonusLabels[selection];
-    this.update = function () {
-        ctx = myGameArea.canvas.getContext("2d");
-        var pat = ctx.createPattern(img, "repeat");
-        ctx.font = "12px Arial";
-        ctx.fillStyle = pat;
-        ctx.fillText(this.label, this.x, this.y + 13);
-    }
-    this.newPos = function () {
-        this.y += this.speedY;
+class Bonus extends Component {
+    constructor(width, height, x, y) {
+        super(width, height, x, y);
+        this.img = new Image();
+        this.img.src = bonusImg;
+        this.speedY = bonusFallSpeed;
+        let selection = Math.floor(Math.random() * bonusHandlers.length);
+        this.action = bonusHandlers[selection];
+        this.label = bonusLabels[selection];
+        this.update = function () {
+            this.pat = this.ctx.createPattern(this.img, "repeat");
+            this.ctx.font = "12px Arial";
+            this.ctx.fillStyle = this.pat;
+            this.ctx.fillText(this.label, this.x, this.y + 13);
+        };
+        this.newPos = function () {
+            this.y += this.speedY;
+        };
     }
 }
 
-function targetBuilder(width, height, x, y) {
-    var img = new Image();
-    img.src = "target.jpg";
-    this.width = width;
-    this.height = height;
-    this.speedX = 0;
-    this.speedY = 0;
-    this.x = x;
-    this.y = y;
-    this.visible = true;
-    this.timeInvisible = 0;
-    this.isSpecialBlock = false;
-    if (Math.random() > aTobTypeBlocks) this.isSpecialBlock = true;
-    this.update = function () {
+class Block extends Component {
+    constructor(width, height, x, y) {
+        super(width, height, x, y);
+        this.img = new Image();
+        this.img.src = blockImg;
+        this.speedX = 0;
+        this.speedY = 0;
+        this.visible = true;
+        this.timeInvisible = 0;
+        this.isSpecialBlock = false;
+        if (Math.random() > aTobTypeBlocks)
+            this.isSpecialBlock = true;
+    }
+    update() {
         this.setCorners();
-        ctx = myGameArea.context;
-        var pat = ctx.createPattern(img, "repeat");
+        this.pat = this.ctx.createPattern(this.img, "repeat");
         if (this.visible) {
-            ctx.fillStyle = pat;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
+            this.ctx.fillStyle = this.pat;
+            this.ctx.fillRect(this.x, this.y, this.width, this.height);
         }
         if (gameMode == 1 && (((performance.now() - this.timeInvisible) / 1000) >= secondsToRenewTarget)) {
             this.visible = true;
             this.timeInvisible = 0;
         }
     }
-    this.moveTargetDown = function () {
+    moveTargetDown() {
         this.y = this.y + defaultTargetShiftY;
         this.update();
     }
-    this.setCorners = function () {
-        this.bottomLeft = [this.x, this.y]
-        this.bottomRight = [this.x + this.width, this.y]
-        this.topRight = [this.x + this.width, this.y + this.height]
-        this.topLeft = [this.x, this.y + this.height]
+    setCorners() {
+        this.bottomLeft = [this.x, this.y];
+        this.bottomRight = [this.x + this.width, this.y];
+        this.topRight = [this.x + this.width, this.y + this.height];
+        this.topLeft = [this.x, this.y + this.height];
     }
 }
 
-function ballBuilder(ballRadius, color, x, y) {
-    this.ballRadius = ballRadius;
-    this.speedX = ballDefaultSpeed;
-    this.speedY = ballDefaultSpeed;
-    this.x = x;
-    this.y = y + this.ballRadius;
-    this.dx = 2;
-    this.dy = -2;
-    this.update = function () {
-        ctx = myGameArea.context;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.ballRadius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.closePath();
+class Ball extends Component {
+    constructor(ballRadius, color, x, y) {
+        super(0, 0, x, y + ballRadius);
+        this.ballRadius = ballRadius;
+        this.speedX = ballDefaultSpeed;
+        this.speedY = ballDefaultSpeed;
+        this.dx = 2;
+        this.dy = -2;
+        this.color = color;
     }
-    this.newPos = function () {
+    update() {
+        this.ctx.fillStyle = this.color;
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, this.ballRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.closePath();
+    }
+    newPos() {
         checkBallToBallCollision(this);
-        targets.forEach(element => {
-            if
-                (
-                (element.visible) &&
-                (this.x > element.bottomLeft[0] && this.x < element.bottomRight[0]) &&
-                ((this.y + this.ballRadius) > element.bottomLeft[1] && this.y < element.topLeft[1])
-            ) {
-                gameScore += currentPointsPerBlock;
-                applySpecialBlockLogic(element);
-                element.visible = false;
-                this.speedY = -this.speedY;
-                if (gameMode == 1) {
-                    element.timeInvisible = performance.now();
-                }
-            }
-        });
+        checkBallToBlockCollision(this);
         if (this.x + this.dx > myGameArea.canvas.width - this.ballRadius || this.x + this.dx < this.ballRadius) {
             this.speedX = -this.speedX;
         }
@@ -347,10 +342,10 @@ function getElapsedGameTime() {
 }
 
 function addNewLine() {
-    targets.forEach(element => element.moveTargetDown())
+    blocks.forEach(element => element.moveTargetDown())
     shiftX = 0;
     for (var x = 0; x < 10; x++) {
-        targets.push(new targetBuilder(40, 20, 40 + shiftX, 40));
+        blocks.push(new Block(40, 20, 40 + shiftX, 40));
         shiftX += 55;
     }
 }
@@ -373,7 +368,7 @@ function moveright() {
 
 function applySpecialBlockLogic(target) {
     if (target.isSpecialBlock == true && Math.random() < bonusChance) {
-        bonuses.push(new bonusBuilder(target.width, target.height, target.x, target.y));
+        bonuses.push(new Bonus(target.width, target.height, target.x, target.y));
     } else {
         tillNewBallCounter++;
         if (tillNewBallCounter > newBallSpawnRate) {
@@ -402,9 +397,6 @@ function clearmove() {
     paddle.speedY = paddleNotMoving;
 }
 
-document.onkeydown = checkkey;
-document.onkeyup = clearmove;
-
 function checkkey(e) {
     if (e.keyCode == leftKeyCode) {
         moveleft();
@@ -432,14 +424,14 @@ function generateTargetLocations() {
     shiftY = 0;
     for (var y = 0; y < 3; y++) {
         for (var x = 0; x < 10; x++) {
-            element = new targetBuilder(targetWidth, targetHeight, 40 + shiftX, 40 + shiftY);
-            targets.push(element);
+            element = new Block(targetWidth, targetHeight, 40 + shiftX, 40 + shiftY);
+            blocks.push(element);
             shiftX += defaultTargetShiftX;
         }
         shiftX = 0;
         shiftY += defaultTargetShiftY;
     }
-    return targets;
+    return blocks;
 }
 
 function addToDatabase() {
@@ -527,7 +519,7 @@ function initBonuses() {
 }
 
 function generateNewBall() {
-    var ball = new ballBuilder(
+    var ball = new Ball(
         ballRadius,
         ballColors[Math.floor(Math.random() * ballColors.length)],
         Math.random() * canvasWidth,
@@ -541,6 +533,22 @@ function checkBallToBallCollision(ball) {
         if (ball.x == secondBall.x && ball.y == secondBall.y) return;
         if (Math.sqrt(Math.pow(ball.x - secondBall.x, 2) + Math.pow(ball.y - secondBall.y, 2)) <= ball.ballRadius + secondBall.ballRadius) {
             collideBalls(ball, secondBall);
+        }
+    });
+}
+
+function checkBallToBlockCollision(ball) {
+    blocks.forEach(element => {
+        if ((element.visible) &&
+            (ball.x > element.bottomLeft[0] && ball.x < element.bottomRight[0]) &&
+            ((ball.y + ball.ballRadius) > element.bottomLeft[1] && ball.y < element.topLeft[1])) {
+            gameScore += currentPointsPerBlock;
+            applySpecialBlockLogic(element);
+            element.visible = false;
+            ball.speedY = -ball.speedY;
+            if (gameMode == 1) {
+                element.timeInvisible = performance.now();
+            }
         }
     });
 }
@@ -570,14 +578,13 @@ function collideBalls(ball1, ball2) {
     ball2.y = (ball2.y += ball2.speedY);
 }
 
-
 function updateGameArea() {
     document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
     myGameArea.clear();
-    targets.forEach(element => element.update());
     paddle.newPos();
-    balls.forEach(one => one.newPos());
+    blocks.forEach(element => element.update());
     bonuses.forEach(x => x.newPos());
+    balls.forEach(one => one.newPos());
     paddle.update();
     balls.forEach(one => one.update());
     bonuses.forEach(x => x.update());
