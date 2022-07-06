@@ -53,7 +53,7 @@ var newBallSpawnRate = 5;
 var tillNewBallCounter = 0;
 var aTobTypeBlocks = 0.5;
 var balls = [];
-var ballColors = ["red", "green", "blue", "orange"];
+var ballColors = ["BlueViolet", "DeepPink", "Fuchsia", "Purple"];
 var ballSpawnAreaYmin = 100;
 var ballSpawnAreaYmax = 150;
 var labelColor = "white";
@@ -115,7 +115,7 @@ function startGame() {
                 startGameTime = performance.now();
                 nick = person;
                 paddle = new paddleBuilder(defaultPaddleWidth, 15, 260, 580);
-                firstBall = new ballBuilder(ballRadius, "red", paddle.x + 100, paddle.y - paddle.height);
+                firstBall = new ballBuilder(ballRadius, "BlueViolet", paddle.x + 100, paddle.y - paddle.height);
                 balls.push(firstBall);
                 initBonuses();
                 targets = generateTargetLocations();
@@ -204,7 +204,7 @@ function paddleBuilder(width, height, x, y) {
 
 function bonusBuilder(width, height, x, y) {
     var img = new Image();
-    img.src = "target.jpg";
+    img.src = "bonus.jpg";
     this.width = width;
     this.height = height;
     this.speedY = bonusFallSpeed;
@@ -218,7 +218,6 @@ function bonusBuilder(width, height, x, y) {
         var pat = ctx.createPattern(img, "repeat");
         ctx.font = "12px Arial";
         ctx.fillStyle = pat;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
         ctx.fillText(this.label, this.x, this.y + 13);
     }
     this.newPos = function () {
@@ -281,6 +280,7 @@ function ballBuilder(ballRadius, color, x, y) {
         ctx.closePath();
     }
     this.newPos = function () {
+        checkBallToBallCollision(this);
         targets.forEach(element => {
             if
                 (
@@ -535,6 +535,41 @@ function generateNewBall() {
     );
     return ball;
 }
+
+function checkBallToBallCollision(ball) {
+    balls.forEach(secondBall => {
+        if (ball.x == secondBall.x && ball.y == secondBall.y) return;
+        if (Math.sqrt(Math.pow(ball.x - secondBall.x, 2) + Math.pow(ball.y - secondBall.y, 2)) <= ball.ballRadius + secondBall.ballRadius) {
+            collideBalls(ball, secondBall);
+        }
+    });
+}
+
+function collideBalls(ball1, ball2) {
+    let angle = Math.atan2(ball1.x - ball2.x, ball1.y - ball2.y);
+
+    let speed1 = Math.sqrt(ball1.speedX * ball1.speedX + ball1.speedY * ball1.speedY);
+    let speed2 = Math.sqrt(ball2.speedX * ball2.speedX + ball2.speedY * ball2.speedY);
+
+    let direction1 = Math.atan2(ball1.speedY, ball1.speedX);
+    let direction2 = Math.atan2(ball2.speedY, ball2.speedX);
+
+    let velocityx1 = speed1 * Math.cos(direction1 - angle);
+    let velocityy1 = speed1 * Math.sin(direction1 - angle);
+    let velocityx2 = speed2 * Math.cos(direction2 - angle);
+    let velocityy2 = speed2 * Math.sin(direction2 - angle);
+
+    ball1.speedX = Math.cos(angle) * velocityx2 + Math.cos(angle + Math.PI / 2) * velocityy1;
+    ball1.speedY = Math.sin(angle) * velocityx2 + Math.sin(angle + Math.PI / 2) * velocityy1;
+    ball2.speedX = Math.cos(angle) * velocityx1 + Math.cos(angle + Math.PI / 2) * velocityy2;
+    ball2.speedY = Math.sin(angle) * velocityx1 + Math.sin(angle + Math.PI / 2) * velocityy2;
+
+    ball1.x = (ball1.x += ball1.speedX);
+    ball1.y = (ball1.y += ball1.speedY);
+    ball2.x = (ball2.x += ball2.speedX);
+    ball2.y = (ball2.y += ball2.speedY);
+}
+
 
 function updateGameArea() {
     document.getElementById("currentGame").innerHTML = "Good luck " + nick + "! Your score is " + gameScore + " !";
